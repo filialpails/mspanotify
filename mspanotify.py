@@ -11,7 +11,7 @@ optmissing = []
 try:
 	from gi.repository import GObject, Gtk, Gdk, AppIndicator3
 	import feedparser
-except ImportError, e:
+except ImportError as e:
 	module = str(e)
 	if module.startswith("No module named ") or module.startswith("cannot import name "): reqmissing.append(module[module.rfind(" ") + 1:])
 	else: print(e)
@@ -20,7 +20,8 @@ try:
 	gi.require_version('Gst', '1.0')
 	from gi.repository import Gst
 	import cairo
-except ImportError:
+except ImportError as e:
+	module = str(e)
 	if module.startswith("No module named ") or module.startswith("cannot import name "): optmissing.append(module[module.rfind(" ") + 1:])
 	else: print(e)
 if reqmissing:
@@ -104,7 +105,7 @@ class Indicator():
 		prefs_item = Gtk.MenuItem("Preferences")
 		quit_item = Gtk.MenuItem("Quit")
 		goto_page_item.connect("activate", self.goto_page_activate)
-		check_now_item.connect("activate", self.check)
+		check_now_item.connect("activate", self.manual_check)
 		fake_check_item.connect("activate", self.fake_check)
 		sep1 = Gtk.SeparatorMenuItem()
 		prefs_item.connect("activate", lambda w: self.prefs.show())
@@ -125,8 +126,14 @@ class Indicator():
 	def fake_check(self, widget):
 		n = Notifier(self.prefs.prefs["sound"])
 		n.show()
-
-	def check(self, widget):
+	
+	def manual_check(self, widget):
+		if not self.check():
+			d = Gtk.MessageDialog(None, Gtk.DialogFlags.DESTROY_WITH_PARENT, Gtk.MessageType.INFO, Gtk.ButtonsType.OK, "No new updates found.")
+			d.run()
+			d.destroy()
+	
+	def check(self):
 		feed = feedparser.parse("http://www.mspaintadventures.com/rss/rss.xml")
 		regex = re.compile(r"http://www.mspaintadventures.com/\?s=([0-9]+)&p=([0-9]+)")
 		matches = regex.match(feed.entries[0].link)
@@ -138,6 +145,8 @@ class Indicator():
 			self.ind.set_status(AppIndicator3.IndicatorStatus.ATTENTION)
 			n = Notifier(self.prefs.prefs["sound"])
 			n.show()
+			return True
+		return False
 	
 	def goto_page_activate(self, widget):
 		webbrowser.open_new_tab("http://www.mspaintadventures.com/?s=6&p=" + self.lastupdate)
@@ -173,7 +182,11 @@ class PrefsWindow(Gtk.Window):
 		freq_spinner.set_range(10, 60)
 		freq_spinner.connect("value-changed", self.freq_changed)
 		sound_check = Gtk.CheckButton("Play sound")
+		if "Gst" in optmissing:
+			self.prefs["sound"] = False
+			sound_check.set_sensitive(False)
 		sound_check.connect("toggled", self.sound_toggled)
+		sound_check.set_active(self.prefs["sound"])
 		close_button.connect("clicked", lambda w: self.hide())
 		hbox1.add(freq_label)
 		hbox1.add(freq_spinner)
@@ -181,9 +194,7 @@ class PrefsWindow(Gtk.Window):
 		hbox3.add(sound_check)
 		vbox.add(hbox1)
 		vbox.add(hbox3)
-		if not "Gst" in optmissing:
-			vbox.add(hbox2)
-			self.prefs["sound"] = False
+		vbox.add(hbox2)
 		self.add(vbox)
 		vbox.show_all()
 	
