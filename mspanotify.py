@@ -1,41 +1,32 @@
 #!/usr/bin/env python3
 
-fail = False
-try:
-	try:
-		from gi.repository import GObject, Gtk, Gdk
-	except ImportError:
-		print("Requres gir1.2-gtk-3.0")
-		fail = True
-	try:
-		import gi
-		gi.require_version('Gst', '1.0')
-		from gi.repository import Gst
-	except ImportError:
-		print("Requires gir1.2-gstreamer-1.0")
-		fail = True
-	try:
-		from gi.repository import AppIndicator3
-	except ImportError:
-		print("Requires gir1.2-appindicator3-0.1")
-		fail = True
-except ImportError:
-	print("Requires python3-gi")
-	fail = True
-try:
-	import cairo
-except ImportError:
-	print("Requires python3-cairo")
-	fail = True
-try:
-	import feedparser
-except ImportError:
-	print("Requires python3-feedparser")
-	fail = True
 import os
 import random
+import sys
 import re
 import webbrowser
+
+reqmissing = []
+optmissing = []
+try:
+	from gi.repository import GObject, Gtk, Gdk, AppIndicator3
+	import feedparser
+except ImportError, e:
+	module = str(e)
+	if module.startswith("No module named ") or module.startswith("cannot import name "): reqmissing.append(module[module.rfind(" ") + 1:])
+	else: print(e)
+try:
+	import gi
+	gi.require_version('Gst', '1.0')
+	from gi.repository import Gst
+	import cairo
+except ImportError:
+	if module.startswith("No module named ") or module.startswith("cannot import name "): optmissing.append(module[module.rfind(" ") + 1:])
+	else: print(e)
+if reqmissing:
+	print("ERROR: The following modules are required for " + sys.argv[0] + " to run and are missing on your system:")
+	for m in reqmissing: print("* " + m)
+	exit()
 
 macrosdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "macros")
 
@@ -70,12 +61,13 @@ class Notifier(Gtk.Window):
 			GObject.timeout_add(self.it.get_delay_time(), self.animate)
 		self.set_keep_above(True)
 		self.connect("show", self.on_show)
-		self.connect("draw", self.on_draw)
-		self.set_app_paintable(True)
+		if not "cairo" in optmissing:
+			self.connect("draw", self.on_draw)
+			self.set_app_paintable(True)
+			colormap = self.get_screen().get_rgba_visual()
+			self.set_visual(colormap);
 		self.add(box)
 		box.show_all()
-		colormap = self.get_screen().get_rgba_visual()
-		self.set_visual(colormap);
 	
 	def on_show(self, widget):
 		screen = widget.get_screen()
@@ -127,7 +119,7 @@ class Indicator():
 		menu.append(quit_item)
 		menu.show_all()
 		self.ind.set_menu(menu)
-		self.lastupdate = self.read_update_file()
+		self.read_update_file()
 		GObject.timeout_add_seconds(self.prefs.prefs["freq"], self.check, None)
 	
 	def fake_check(self, widget):
@@ -142,7 +134,7 @@ class Indicator():
 		pagenum = matches.group(2)
 		if int(pagenum) > int(self.lastupdate):
 			self.lastupdate = pagenum
-			self.write_update_file(self.lastupdate)
+			self.write_update_file()
 			self.ind.set_status(AppIndicator3.IndicatorStatus.ATTENTION)
 			n = Notifier(self.prefs.prefs["sound"])
 			n.show()
@@ -152,23 +144,24 @@ class Indicator():
 		self.ind.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
 
 	def quit_activate(self, widget):
-		self.write_update_file(self.lastupdate)
+		self.write_update_file()
 		Gtk.main_quit()
 	
-	def write_update_file(self, lastupdatetime):
+	def write_update_file(self):
 		with open(os.path.expanduser("~/.mspaupdate"), "w") as f:
-			f.write(lastupdatetime)
+			f.write(self.lastupdate)
 
 	def read_update_file(self):
 		if not os.path.exists(os.path.expanduser("~/.mspaupdate")):
-			self.write_update_file("001901")
+			self.lastupdate = "001901"
+			self.write_update_file()
 		with open(os.path.expanduser("~/.mspaupdate"), "r") as f:
-			update = f.read()
-		return update
+			self.lastupdate = f.read()
 
 class PrefsWindow(Gtk.Window):
 	def __init__(self):
 		Gtk.Window.__init__(self, title = "MSPANotify Preferences", window_position = Gtk.WindowPosition.CENTER)
+		self.prefs = { "freq": 600, "sound": True }
 		vbox = Gtk.VBox()
 		hbox1 = Gtk.HBox()
 		hbox2 = Gtk.HBox()
@@ -188,20 +181,20 @@ class PrefsWindow(Gtk.Window):
 		hbox3.add(sound_check)
 		vbox.add(hbox1)
 		vbox.add(hbox3)
-		vbox.add(hbox2)
+		if not "Gst" in optmissing:
+			vbox.add(hbox2)
+			self.prefs["sound"] = False
 		self.add(vbox)
 		vbox.show_all()
-		self.prefs = { "freq": 600, "sound": True }
-		
+	
 	def freq_changed(self, widget):
 		self.prefs["freq"] = widget.get_value() * 60
 	
 	def sound_toggled(self, widget):
 		self.prefs["sound"] = widget.get_active()
 
-if __name__ == "__main__" and fail == False:
+if __name__ == "__main__":
 	GObject.threads_init()
 	Gst.init(None)
 	Indicator()
 	Gtk.main()
-
