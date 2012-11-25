@@ -62,7 +62,7 @@ class Notifier(Gtk.Window):
 			GObject.timeout_add(self.it.get_delay_time(), self.animate)
 		self.set_keep_above(True)
 		self.connect("show", self.on_show)
-		if not "cairo" in optmissing:
+		if "cairo" not in optmissing:
 			self.connect("draw", self.on_draw)
 			self.set_app_paintable(True)
 			colormap = self.get_screen().get_rgba_visual()
@@ -121,14 +121,16 @@ class Indicator():
 		menu.show_all()
 		self.ind.set_menu(menu)
 		self.read_update_file()
-		GObject.timeout_add_seconds(self.prefs.prefs["freq"], self.check, None)
+		GObject.timeout_add_seconds(self.prefs.prefs["freq"], self.check)
 	
 	def fake_check(self, widget):
 		n = Notifier(self.prefs.prefs["sound"])
 		n.show()
 	
 	def manual_check(self, widget):
-		if not self.check():
+		temp = self.lastupdate
+		self.check()
+		if self.lastupdate > temp:
 			d = Gtk.MessageDialog(None, Gtk.DialogFlags.DESTROY_WITH_PARENT, Gtk.MessageType.INFO, Gtk.ButtonsType.OK, "No new updates found.")
 			d.run()
 			d.destroy()
@@ -145,8 +147,6 @@ class Indicator():
 			self.ind.set_status(AppIndicator3.IndicatorStatus.ATTENTION)
 			n = Notifier(self.prefs.prefs["sound"])
 			n.show()
-			return True
-		return False
 	
 	def goto_page_activate(self, widget):
 		webbrowser.open_new_tab("http://www.mspaintadventures.com/?s=6&p=" + self.lastupdate)
