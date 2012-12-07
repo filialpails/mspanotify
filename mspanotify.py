@@ -13,8 +13,10 @@ try:
 	import feedparser
 except ImportError as e:
 	module = str(e)
-	if module.startswith("No module named ") or module.startswith("cannot import name "): reqmissing.append(module[module.rfind(" ") + 1:])
-	else: print(e)
+	if module.startswith("No module named ") or module.startswith("cannot import name "):
+		reqmissing.append(module[module.rfind(" ") + 1:])
+	else:
+		print(e)
 try:
 	import gi
 	gi.require_version('Gst', '1.0')
@@ -22,8 +24,10 @@ try:
 	import cairo
 except ImportError as e:
 	module = str(e)
-	if module.startswith("No module named ") or module.startswith("cannot import name "): optmissing.append(module[module.rfind(" ") + 1:])
-	else: print(e)
+	if module.startswith("No module named ") or module.startswith("cannot import name "):
+		optmissing.append(module[module.rfind(" ") + 1:])
+	else:
+		print(e)
 if reqmissing:
 	print("ERROR: The following modules are required for " + sys.argv[0] + " to run and are missing on your system:")
 	for m in reqmissing: print("* " + m)
@@ -33,9 +37,12 @@ macrosdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "macros")
 
 class Notifier(Gtk.Window):
 	def animate(self):
-		self.image.set_from_pixbuf(self.it.get_pixbuf().add_alpha(True, 213, 218, 240))
-		self.it.advance(None)
-		GObject.timeout_add(self.it.get_delay_time(), self.animate)
+		advance = self.it.advance(None)
+		if advance:
+			self.image.set_from_pixbuf(self.it.get_pixbuf().add_alpha(True, 213, 218, 240))
+		delay = self.it.get_delay_time()
+		if delay != -1:
+			GObject.timeout_add(delay, self.animate)
 		return False
 	
 	def __init__(self, sound):
@@ -56,10 +63,11 @@ class Notifier(Gtk.Window):
 		if self.image.get_storage_type() == Gtk.ImageType.PIXBUF:
 			self.image.set_from_pixbuf(self.image.get_pixbuf().add_alpha(True, 213, 218, 240))
 		elif self.image.get_storage_type() == Gtk.ImageType.ANIMATION:
-			anim = self.image.get_animation()
-			self.it = anim.get_iter(None)
-			self.image.set_from_pixbuf(self.it.get_pixbuf())
-			GObject.timeout_add(self.it.get_delay_time(), self.animate)
+			self.it = self.image.get_animation().get_iter(None)
+			self.image.set_from_pixbuf(self.it.get_pixbuf().add_alpha(True, 213, 218, 240))
+			delay = self.it.get_delay_time()
+			if delay != -1:
+				GObject.timeout_add(delay, self.animate)
 		self.set_keep_above(True)
 		self.connect("show", self.on_show)
 		if "cairo" not in optmissing:
@@ -121,6 +129,7 @@ class Indicator():
 		menu.show_all()
 		self.ind.set_menu(menu)
 		self.read_update_file()
+		self.check()
 		GObject.timeout_add_seconds(self.prefs.prefs["freq"], self.check)
 	
 	def fake_check(self, widget):
@@ -147,6 +156,7 @@ class Indicator():
 			self.ind.set_status(AppIndicator3.IndicatorStatus.ATTENTION)
 			n = Notifier(self.prefs.prefs["sound"])
 			n.show()
+		return True
 	
 	def goto_page_activate(self, widget):
 		webbrowser.open_new_tab("http://www.mspaintadventures.com/?s=6&p=" + self.lastupdate)
