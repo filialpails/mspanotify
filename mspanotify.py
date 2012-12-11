@@ -45,8 +45,9 @@ class Notifier(Gtk.Window):
 			GObject.timeout_add(delay, self.animate)
 		return False
 	
-	def __init__(self, sound):
+	def __init__(self, sound, newpage):
 		Gtk.Window.__init__(self, decorated = False, resizable = False)
+		self.newpage = newpage
 		self.sound = sound
 		if self.sound:
 			self.player = Gst.ElementFactory.make("playbin", None)
@@ -57,7 +58,7 @@ class Notifier(Gtk.Window):
 			bus.connect("message", self.on_message)
 		box = Gtk.EventBox()
 		box.set_visible_window(False)
-		box.connect("button-press-event", lambda w, e: self.hide())
+		box.connect("button-press-event", self.on_click)
 		self.image = Gtk.Image.new_from_file(os.path.join(macrosdir, random.choice([f for f in os.listdir(macrosdir) if f.lower()[f.rfind(".") + 1:] in ("jpg", "jpeg", "png", "gif")])))
 		box.add(self.image)
 		if self.image.get_storage_type() == Gtk.ImageType.PIXBUF:
@@ -74,7 +75,7 @@ class Notifier(Gtk.Window):
 			self.connect("draw", self.on_draw)
 			self.set_app_paintable(True)
 			colormap = self.get_screen().get_rgba_visual()
-			self.set_visual(colormap);
+			self.set_visual(colormap)
 		self.add(box)
 		box.show_all()
 	
@@ -99,6 +100,11 @@ class Notifier(Gtk.Window):
 			self.player.set_state(Gst.State.NULL)
 			err, debug = message.parse_error()
 			print("Error: %s" % err, debug)
+
+	def on_click(self, widget, event):
+		if event.button == 1:
+			webbrowser.open_new_tab("http://www.mspaintadventures.com/?s=6&p=" + self.newpage)
+		self.hide()
 
 class Indicator():
 	def __init__(self):
@@ -133,13 +139,13 @@ class Indicator():
 		GObject.timeout_add_seconds(self.prefs.prefs["freq"], self.check)
 	
 	def fake_check(self, widget):
-		n = Notifier(self.prefs.prefs["sound"])
+		n = Notifier(self.prefs.prefs["sound"], self.lastupdate)
 		n.show()
 	
 	def manual_check(self, widget):
 		temp = self.lastupdate
 		self.check()
-		if self.lastupdate > temp:
+		if self.lastupdate >= temp:
 			d = Gtk.MessageDialog(None, Gtk.DialogFlags.DESTROY_WITH_PARENT, Gtk.MessageType.INFO, Gtk.ButtonsType.OK, "No new updates found.")
 			d.run()
 			d.destroy()
@@ -151,11 +157,11 @@ class Indicator():
 		storynum = matches.group(1)
 		pagenum = matches.group(2)
 		if int(pagenum) > int(self.lastupdate):
-			self.lastupdate = pagenum
 			self.write_update_file()
 			self.ind.set_status(AppIndicator3.IndicatorStatus.ATTENTION)
-			n = Notifier(self.prefs.prefs["sound"])
+			n = Notifier(self.prefs.prefs["sound"], int(self.lastupdate) + 1)
 			n.show()
+			self.lastupdate = pagenum
 		return True
 	
 	def goto_page_activate(self, widget):
