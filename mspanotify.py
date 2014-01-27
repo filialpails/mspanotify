@@ -29,24 +29,30 @@ except ImportError as e:
     else:
         print(e)
 if _reqmissing:
-    print("ERROR: The following modules are required for " + sys.argv[0] + " to run and are missing on your system:")
+    print("ERROR: The following modules are required for "
+          + sys.argv[0]
+          + " to run and are missing on your system:")
     for m in reqmissing: print("* " + m)
     exit()
 
 class Notifier(Gtk.Window):
-    _macrosdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "macros")
-    
+    _macrosdir = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "macros")
+
     def _animate(self):
         advance = self._it.advance(None)
         if advance:
-            self._image.set_from_pixbuf(self._it.get_pixbuf().add_alpha(True, 213, 218, 240))
+            self._image.set_from_pixbuf(
+                self._it.get_pixbuf().add_alpha(True, 213, 218, 240))
         delay = self._it.get_delay_time()
         if delay != -1:
             GObject.timeout_add(delay, self._animate)
         return False
-    
+
     def __init__(self, sound, newpage):
         Gtk.Window.__init__(self, decorated = False, resizable = False)
+        self.set_gravity(Gdk.Gravity.SOUTH_EAST)
         self._newpage = newpage
         self._sound = sound
         if self._sound:
@@ -58,15 +64,21 @@ class Notifier(Gtk.Window):
             bus.connect("message", self._on_message)
         box = Gtk.EventBox()
         box.set_visible_window(False)
-        box.connect("button-press-event", self._on_click)
+        self.connect("button-press-event", self._on_click)
         macrosdir = self.__class__._macrosdir
-        self._image = Gtk.Image.new_from_file(os.path.join(macrosdir, random.choice(tuple(f for f in os.listdir(macrosdir) if f.lower()[f.rfind(".") + 1:] in {"jpg", "jpeg", "png", "gif"}))))
+        self._image = Gtk.Image.new_from_file(
+            os.path.join(macrosdir, random.choice(
+                tuple(f for f in os.listdir(macrosdir)
+                      if f.lower()[f.rfind(".") + 1:]
+                      in {"jpg", "jpeg", "png", "gif"}))))
         box.add(self._image)
         if self._image.get_storage_type() == Gtk.ImageType.PIXBUF:
-            self._image.set_from_pixbuf(self._image.get_pixbuf().add_alpha(True, 213, 218, 240))
+            self._image.set_from_pixbuf(
+                self._image.get_pixbuf().add_alpha(True, 213, 218, 240))
         elif self._image.get_storage_type() == Gtk.ImageType.ANIMATION:
             self._it = self._image.get_animation().get_iter(None)
-            self._image.set_from_pixbuf(self._it.get_pixbuf().add_alpha(True, 213, 218, 240))
+            self._image.set_from_pixbuf(
+                self._it.get_pixbuf().add_alpha(True, 213, 218, 240))
             delay = self._it.get_delay_time()
             if delay != -1:
                 GObject.timeout_add(delay, self._animate)
@@ -79,21 +91,26 @@ class Notifier(Gtk.Window):
             self.set_visual(colormap)
         self.add(box)
         box.show_all()
-    
+
     def _on_show(self, widget):
         screen = widget.get_screen()
         w, h = self.get_size()
-        self.move(screen.get_width() - w, screen.get_height() - h)
+        self.move(screen.get_width(), screen.get_height())
         if self._sound:
             macrosdir = self.__class__._macrosdir
-            self._player.set_property("uri", "file://" + os.path.join(macrosdir, random.choice(tuple(f for f in os.listdir(macrosdir) if f.lower()[f.rfind(".") + 1:] in {"wav", "mp3", "ogg"}))))
+            files = tuple(f for f in os.listdir(macrosdir)
+                          if f.lower()[f.rfind(".") + 1:]
+                          in {"wav", "mp3", "ogg"})
+            self._player.set_property(
+                "uri", "file://" + os.path.join(macrosdir,
+                                                random.choice(files)))
             self._player.set_state(Gst.State.PLAYING)
-    
+
     def _on_draw(self, widget, cr):
         cr.set_source_rgba(1, 1, 1, 0)
         cr.set_operator(cairo.OPERATOR_SOURCE)
         cr.paint()
-    
+
     def _on_message(self, bus, message):
         t = message.type
         if t == Gst.MessageType.EOS:
@@ -110,7 +127,11 @@ class Notifier(Gtk.Window):
 
 class Indicator():
     def __init__(self):
-        self._ind = AppIndicator3.Indicator.new_with_path("mspanotify", "logo", AppIndicator3.IndicatorCategory.APPLICATION_STATUS, os.path.dirname(os.path.realpath(__file__)))
+        self._ind = AppIndicator3.Indicator.new_with_path(
+            "mspanotify",
+            "logo",
+            AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
+            os.path.dirname(os.path.realpath(__file__)))
         self._ind.set_attention_icon_full("logo2", ":o")
         self._ind.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
         menu = Gtk.Menu()
@@ -139,22 +160,27 @@ class Indicator():
         self._read_update_file()
         self._check()
         GObject.timeout_add_seconds(self._prefs.prefs["freq"], self._check)
-    
+
     def _fake_check(self, widget):
         n = Notifier(self._prefs.prefs["sound"], self._lastupdate)
         n.show()
-    
+
     def _manual_check(self, widget):
         temp = self._lastupdate
         self._check()
         if self._lastupdate >= temp:
-            d = Gtk.MessageDialog(None, Gtk.DialogFlags.DESTROY_WITH_PARENT, Gtk.MessageType.INFO, Gtk.ButtonsType.OK, "No new updates found.")
+            d = Gtk.MessageDialog(None,
+                                  Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                                  Gtk.MessageType.INFO,
+                                  Gtk.ButtonsType.OK,
+                                  "No new updates found.")
             d.run()
             d.destroy()
-    
+
     def _check(self):
         feed = feedparser.parse("http://www.mspaintadventures.com/rss/rss.xml")
-        regex = re.compile(r"http://www.mspaintadventures.com/\?s=([0-9]+)&p=([0-9]+)")
+        regex = re.compile(
+            r"http://www.mspaintadventures.com/\?s=([0-9]+)&p=([0-9]+)")
         matches = regex.match(feed.entries[0].link)
         storynum = matches.group(1)
         pagenum = matches.group(2)
@@ -165,15 +191,16 @@ class Indicator():
             n.show()
             self._lastupdate = pagenum
         return True
-    
+
     def _goto_page_activate(self, widget):
-        webbrowser.open_new_tab("http://www.mspaintadventures.com/?s=6&p=" + self._lastupdate)
+        webbrowser.open_new_tab(
+            "http://www.mspaintadventures.com/?s=6&p=" + self._lastupdate)
         self._ind.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
 
     def _quit_activate(self, widget):
         self._write_update_file()
         Gtk.main_quit()
-    
+
     def _write_update_file(self):
         with open(os.path.expanduser("~/.mspaupdate"), "w") as f:
             f.write(self._lastupdate)
@@ -187,7 +214,9 @@ class Indicator():
 
 class PrefsWindow(Gtk.Window):
     def __init__(self):
-        Gtk.Window.__init__(self, title = "MSPANotify Preferences", window_position = Gtk.WindowPosition.CENTER)
+        Gtk.Window.__init__(self,
+                            title = "MSPANotify Preferences",
+                            window_position = Gtk.WindowPosition.CENTER)
         self.prefs = { "freq": 600, "sound": True }
         vbox = Gtk.VBox()
         hbox1 = Gtk.HBox()
@@ -215,10 +244,10 @@ class PrefsWindow(Gtk.Window):
         vbox.add(hbox2)
         self.add(vbox)
         vbox.show_all()
-    
+
     def _freq_changed(self, widget):
         self.prefs["freq"] = widget.get_value() * 60
-    
+
     def _sound_toggled(self, widget):
         self.prefs["sound"] = widget.get_active()
 
